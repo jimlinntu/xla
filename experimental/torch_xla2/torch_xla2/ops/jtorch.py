@@ -4,6 +4,7 @@ import collections.abc
 import functools
 from typing import Optional, Sequence
 import numpy as np
+import logging
 
 import jax
 import jax.numpy as jnp
@@ -220,6 +221,29 @@ def scaled_dot_product_attention(
     return env.j2t_iso(res)
 
    return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
+
+@register_function(torch.nn.functional.cosine_similarity)
+def cosine_similarity(x1, x2, dim=1, eps=1e-8):
+  if len(x1.shape) == 0 and len(x2.shape) == 0:
+    assert dim == 0
+
+    numerator = x1 * x2
+    x1_norm = jnp.maximum(jnp.linalg.vector_norm(x1), eps)
+    x2_norm = jnp.maximum(jnp.linalg.vector_norm(x2), eps)
+
+    denominator = x1_norm * x2_norm
+  else:
+    broadcasted_x1, broadcasted_x2 = jnp.broadcast_arrays(x1, x2)
+
+    numerator = jnp.vecdot(broadcasted_x1, broadcasted_x2, axis=dim)
+
+    x1_norm = jnp.maximum(jnp.linalg.vector_norm(broadcasted_x1, axis=dim), eps)
+    x2_norm = jnp.maximum(jnp.linalg.vector_norm(broadcasted_x2, axis=dim), eps)
+
+    denominator = x1_norm * x2_norm
+
+  return numerator / denominator
+
 
 @register_function(torch.Tensor.__getitem__)
 def getitem(self, indexes):
